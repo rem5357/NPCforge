@@ -88,7 +88,15 @@ cargo run
 - `--high <LEVEL>` - Maximum level for random generation (1-20, default: 10)
 - `-a, --alignment <ALIGNMENT>` - Specify alignment (e.g., "CG", "LN", "CE")
 - `--role <ROLE>` - Role/occupation (e.g., "Mercenary", "Scholar", "Pirate", "random", default: "Mercenary")
+- `--melee` - Prefer melee combat style (affects weapons, spells, subclass, feats)
+- `--ranged` - Prefer ranged combat style (affects weapons, spells, subclass, feats)
 - `-h, --help` - Display help information
+
+### Fighting Style Notes
+- `--melee`: Prioritizes melee weapons, close-range/touch spells, melee-focused subclasses
+- `--ranged`: Prioritizes ranged weapons, long-range spells, ranged-focused subclasses
+- Both flags: Creates versatile character with mix of melee and ranged options
+- Neither flag: Random selection (90% ranged for spellcasters, 50/50 for martial classes)
 
 ### Usage Examples
 ```bash
@@ -122,6 +130,21 @@ cargo run -- -c "Fighter,Rogue,Ranger" --lvl1 5 --lvl2 3 --lvl3 2
 # Generate an NPC with a specific role
 cargo run -- --role "Pirate" -c "Rogue"
 
+# Generate a melee fighter
+cargo run -- -c "Fighter" -l 8 --melee
+
+# Generate a ranged wizard
+cargo run -- -c "Wizard" -l 10 --ranged
+
+# Generate a versatile ranger (both melee and ranged)
+cargo run -- -c "Ranger" -l 7 --melee --ranged
+
+# Generate a farmer NPC (non-adventurer backstory)
+cargo run -- --role "Farmer" -c "Druid" -l 5
+
+# Generate a merchant NPC
+cargo run -- --role "Merchant" -c "Bard" -l 4
+
 # Get help
 cargo run -- --help
 ```
@@ -137,9 +160,10 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 {
   "name": "Character name",
   "race": "Race",
-  "class": "Class",
-  "subclass": "Subclass",
+  "class": "Class (or Fighter/Wizard for multiclass)",
+  "subclass": "Subclass (or Champion/Evocation for multiclass)",
   "level": 10,
+  "class_levels": {"Fighter": 6, "Wizard": 4},  // Optional, multiclass only
   "background": "Background",
   "alignment": "Alignment",
   "ability_scores": { ... },
@@ -200,6 +224,16 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 - ✅ Fixed multiclass JSON format (class as "Fighter/Wizard" not array)
 - ✅ Enhanced spellcasting flexibility for multiclass characters
 - ✅ Comprehensive validation for level distribution
+
+### Phase 6: Combat Styles & Role-Based Backstories
+- ✅ Added `class_levels` field to JSON for multiclass transparency
+- ✅ Implemented `--melee` and `--ranged` fighting style flags
+- ✅ Fighting style affects weapons, spells, subclass, and feat selection
+- ✅ Default fighting styles (90% ranged for casters, 50/50 for martial)
+- ✅ Role-based backstory system (adventurer vs working NPC)
+- ✅ Combat roles (Mercenary, Soldier) get adventurer-focused backstories
+- ✅ Non-combat roles (Farmer, Merchant) get profession-focused NPC backstories
+- ✅ NPCs use class abilities in their profession (Farmer Druid, Blacksmith Fighter)
 
 ## Lessons Learned
 
@@ -331,6 +365,15 @@ NPCforge/
 - Comprehensive validation and error handling
 - Updated documentation with multiclass examples
 
+**Session 4**: Fighting styles and role-based backstories
+- Added `class_levels` field to JSON for multiclass transparency
+- Implemented `--melee` and `--ranged` combat style preferences
+- Fighting styles affect weapons, spells, subclasses, and feats
+- Role-based backstory system (adventurer vs working NPC)
+- Combat roles get adventurer-focused backstories
+- Non-combat roles get profession-focused NPC backstories
+- NPCs use class abilities in their profession (not for adventuring)
+
 ## Example Generated NPCs
 
 ### Vesla Dawnstar
@@ -354,6 +397,22 @@ NPCforge/
 - **Background**: Urchin
 - **Alignment**: Chaotic Neutral
 - **Highlights**: 3-class multiclass, manual level distribution, versatile skill set
+
+### TestFarmer (Working NPC)
+- **Race**: Goliath
+- **Class**: Druid (Land's Wrath), Level 5
+- **Role**: Farmer (non-combat)
+- **Background**: Folk Hero
+- **Alignment**: Neutral Good
+- **Highlights**: Uses Druid magic to help crops grow, lives in a farming community, not an adventurer
+
+### TestMerchant (Working NPC)
+- **Race**: Tabaxi
+- **Class**: Bard (Glamour), Level 4
+- **Role**: Merchant (non-combat)
+- **Background**: Guild Artisan
+- **Alignment**: Chaotic Neutral
+- **Highlights**: Uses Glamour magic to charm customers and boost sales, runs a shop in a small town
 
 ## Contributing
 
