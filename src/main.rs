@@ -56,6 +56,14 @@ struct Args {
     /// Role/occupation for the NPC (e.g., "Mercenary", "Scholar", "Pirate", or "random")
     #[arg(long, default_value = "Mercenary")]
     role: String,
+
+    /// Prefer melee combat style (affects weapons, spells, subclass, feats)
+    #[arg(long)]
+    melee: bool,
+
+    /// Prefer ranged combat style (affects weapons, spells, subclass, feats)
+    #[arg(long)]
+    ranged: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -66,6 +74,8 @@ struct NPC {
     class_name: String,
     subclass: Option<String>,
     level: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    class_levels: Option<std::collections::HashMap<String, u8>>,
     background: String,
     alignment: String,
 
@@ -280,6 +290,8 @@ async fn generate_npc_with_ollama(
     level_range: Option<(u8, u8)>,
     alignment: Option<&str>,
     role: &str,
+    melee: bool,
+    ranged: bool,
 ) -> Result<NPC> {
     // Create client with extended timeout for AI generation
     let client = reqwest::Client::builder()
@@ -287,7 +299,7 @@ async fn generate_npc_with_ollama(
         .build()
         .context("Failed to create HTTP client")?;
 
-    let prompt = create_npc_generation_prompt(name, race, class, level, level_distribution, level_range, alignment, role);
+    let prompt = create_npc_generation_prompt(name, race, class, level, level_distribution, level_range, alignment, role, melee, ranged);
 
     let request = OllamaRequest {
         model: "qwen2.5:32b-instruct".to_string(),
@@ -337,6 +349,8 @@ fn create_npc_generation_prompt(
     level_range: Option<(u8, u8)>,
     alignment: Option<&str>,
     role: &str,
+    melee: bool,
+    ranged: bool,
 ) -> String {
     let mut prompt = String::from(
         "You are a D&D 2024 character generator. Generate a complete, TRULY RANDOM D&D character with maximum variety and creativity.\n\n"
@@ -467,6 +481,9 @@ Requirements:
     }
 
     // Add role requirement
+    let is_combat_role = matches!(role.to_lowercase().as_str(),
+        "mercenary" | "soldier" | "guard" | "adventurer" | "pirate" | "bandit" | "gladiator");
+
     if role.to_lowercase() == "random" {
         prompt.push_str("- Choose a RANDOM role/occupation from: Soldier, Mercenary, Pirate, Merchant, Scholar, Academic, Builder, Craftsman, Farmer, Laborer, Vagrant, Beggar, Noble, Aristocrat, Statesman, Diplomat, Musician, Bard, Traveling Performer, Entertainer, Sailor, Guard, Adventurer, Explorer, Hermit, Mystic, etc.\n");
     } else if role.to_lowercase() != "mercenary" {
@@ -478,20 +495,73 @@ Requirements:
         prompt.push_str("  - This character makes their living through combat and protection services\n");
     }
 
-    prompt.push_str("- Choose a RANDOM background (Acolyte, Charlatan, Criminal, Entertainer, Folk Hero, Guild Artisan, Hermit, Noble, Outlander, Sage, Sailor, Soldier, Urchin, etc.)\n");
+    // Add fighting style requirements
+    let is_spellcaster = class.map(|c| {
+        let classes = c.split(',').collect::<Vec<_>>();
+        classes.iter().any(|&cls| matches!(cls.trim().to_lowercase().as_str(),
+            "wizard" | "sorcerer" | "warlock" | "cleric" | "druid" | "bard" | "artificer"))
+    }).unwrap_or(false);
+
+    if melee && ranged {
+        prompt.push_str("\n- FIGHTING STYLE: Versatile (both melee and ranged)\n");
+        prompt.push_str("  - Choose weapons that work at both ranges or a mix of melee and ranged weapons\n");
+        prompt.push_str("  - For spellcasters: Balance spell selection between melee-range and long-range spells\n");
+        prompt.push_str("  - Subclass should support versatile combat (e.g., not purely ranged or purely melee focused)\n");
+    } else if melee {
+        prompt.push_str("\n- FIGHTING STYLE: Melee combat preference\n");
+        prompt.push_str("  - Prioritize melee weapons (swords, axes, hammers, polearms, etc.)\n");
+        prompt.push_str("  - For spellcasters: Focus on touch spells, close-range spells, and defensive/buff spells\n");
+        prompt.push_str("  - Choose melee-oriented subclasses (e.g., Battle Master, Eldritch Knight, War Cleric, etc.)\n");
+        prompt.push_str("  - Feats should support melee combat (Polearm Master, Great Weapon Master, etc.)\n");
+    } else if ranged {
+        prompt.push_str("\n- FIGHTING STYLE: Ranged combat preference\n");
+        prompt.push_str("  - Prioritize ranged weapons (bows, crossbows, thrown weapons, etc.)\n");
+        prompt.push_str("  - For spellcasters: Focus on long-range attack spells and area effects\n");
+        prompt.push_str("  - Choose ranged-oriented subclasses (e.g., Arcane Archer, Sharpshooter builds, Evocation Wizard, etc.)\n");
+        prompt.push_str("  - Feats should support ranged combat (Sharpshooter, Crossbow Expert, etc.)\n");
+    } else {
+        // Random fighting style based on class type
+        if is_spellcaster {
+            prompt.push_str("\n- FIGHTING STYLE: Random (90% chance ranged for spellcasters)\n");
+            prompt.push_str("  - Most likely ranged combat with long-range spells\n");
+            prompt.push_str("  - 10% chance of melee-focused caster build (War Cleric, Bladesinger, etc.)\n");
+        } else {
+            prompt.push_str("\n- FIGHTING STYLE: Random (50/50 melee or ranged)\n");
+            prompt.push_str("  - Equal chance of melee or ranged weapon focus\n");
+            prompt.push_str("  - Choose subclass and weapons accordingly\n");
+        }
+    }
+
+    prompt.push_str("\n- Choose a RANDOM background (Acolyte, Charlatan, Criminal, Entertainer, Folk Hero, Guild Artisan, Hermit, Noble, Outlander, Sage, Sailor, Soldier, Urchin, etc.)\n");
     prompt.push_str("- Generate appropriate ability scores (use standard array or point buy)\n");
     prompt.push_str("- Calculate all derived stats correctly (AC, HP, initiative, proficiency bonus, etc.)\n");
     prompt.push_str("- Include all relevant skills, proficiencies, and saving throws\n");
     prompt.push_str("- For spellcasters, include appropriate spells based on class and level\n");
     prompt.push_str("- Include attacks and combat abilities\n");
     prompt.push_str("- Generate realistic equipment based on class and level\n");
-    prompt.push_str("- Create a DETAILED and COMPREHENSIVE backstory (3-5 paragraphs) that includes:\n");
-    prompt.push_str("  * Childhood: Family, upbringing, early life experiences\n");
-    prompt.push_str("  * Education: Training, mentors, how they learned their skills\n");
-    prompt.push_str("  * Life events: Major events, adventures, tragedies, triumphs\n");
-    prompt.push_str("  * Relationships: Important people (family, friends, rivals, mentors, lovers)\n");
-    prompt.push_str("  * Personality: Likes, dislikes, hobbies, quirks\n");
-    prompt.push_str("  * Current situation: What brought them to where they are now in life\n");
+
+    // Add role-appropriate backstory instructions
+    if is_combat_role {
+        prompt.push_str("- Create a DETAILED and COMPREHENSIVE backstory (3-5 paragraphs) for an ADVENTURER/COMBAT-FOCUSED character:\n");
+        prompt.push_str("  * This character is actively pursuing adventure, combat missions, or mercenary work\n");
+        prompt.push_str("  * Childhood: Family, upbringing, early life experiences\n");
+        prompt.push_str("  * Education: Training, mentors, how they learned their combat skills\n");
+        prompt.push_str("  * Life events: Adventures, battles, missions, tragedies, triumphs\n");
+        prompt.push_str("  * Relationships: Important people (family, friends, rivals, mentors, lovers)\n");
+        prompt.push_str("  * Personality: Likes, dislikes, hobbies, quirks\n");
+        prompt.push_str("  * Current situation: What missions/adventures they're currently pursuing\n");
+    } else {
+        prompt.push_str("- Create a DETAILED and COMPREHENSIVE backstory (3-5 paragraphs) for a WORKING NPC living in their role:\n");
+        prompt.push_str(&format!("  * This is a {} - NOT an adventurer, but someone living and working in their profession\n", role));
+        prompt.push_str("  * They might have class abilities, but use them in their daily work, not for adventuring\n");
+        prompt.push_str("  * Childhood: Family, upbringing, how they came to their profession\n");
+        prompt.push_str("  * Education: Training in their craft/profession, mentors who taught them\n");
+        prompt.push_str("  * Life events: Major events related to their work, community, family\n");
+        prompt.push_str("  * Relationships: Important people in their community, family, customers, rivals\n");
+        prompt.push_str("  * Personality: Likes, dislikes, hobbies, quirks related to their profession and life\n");
+        prompt.push_str("  * Current situation: Where they live (city, town, village, farm, wilderness), their daily life, current challenges\n");
+        prompt.push_str("  * Examples: A farmer with Druid powers who uses them to help crops grow; A blacksmith Fighter who crafts weapons but rarely fights; A scholarly Wizard who teaches at an academy\n");
+    }
     prompt.push_str("- Include personality traits, ideals, bonds, and flaws\n");
     prompt.push_str("- Create a vivid physical appearance\n\n");
 
@@ -501,6 +571,8 @@ IMPORTANT: For multiclass characters:
 - "class" field should be a single string with classes separated by "/" (e.g., "Fighter/Wizard")
 - "subclass" field should be a single string with subclasses separated by "/" in same order (e.g., "Battle Master/Evocation")
 - "level" is the TOTAL character level (all classes combined)
+- "class_levels" is an object showing the level distribution (e.g., {"Fighter": 5, "Wizard": 5})
+- ONLY include "class_levels" for multiclass characters (omit for single-class)
 
 {
   "name": "Full character name",
@@ -508,6 +580,7 @@ IMPORTANT: For multiclass characters:
   "class": "Character class (or Fighter/Wizard for multiclass)",
   "subclass": "Character subclass or null (or Battle Master/Evocation for multiclass)",
   "level": 10,
+  "class_levels": {"Fighter": 5, "Wizard": 5},
   "background": "Background name",
   "alignment": "Alignment",
   "ability_scores": {
@@ -758,6 +831,8 @@ async fn main() -> Result<()> {
             level_range,
             args.alignment.as_deref(),
             &args.role,
+            args.melee,
+            args.ranged,
         )
         .await;
 
