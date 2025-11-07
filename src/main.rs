@@ -21,12 +21,25 @@ struct Args {
     race: Option<String>,
 
     /// Class for the NPC - can specify multiple comma-separated for multiclass (e.g., "Ranger,Druid")
+    /// Maximum 3 classes allowed. If more are specified, only first 3 are used.
     #[arg(short, long)]
     class: Option<String>,
 
-    /// Specific level for the NPC (1-20, overrides low/high)
+    /// Total level for the NPC (1-20, distributed across all classes in multiclass)
     #[arg(short, long)]
     level: Option<u8>,
+
+    /// Levels in first class (for multiclass distribution)
+    #[arg(long)]
+    lvl1: Option<u8>,
+
+    /// Levels in second class (for multiclass distribution)
+    #[arg(long)]
+    lvl2: Option<u8>,
+
+    /// Levels in third class (for multiclass distribution)
+    #[arg(long)]
+    lvl3: Option<u8>,
 
     /// Minimum level for random generation (1-20)
     #[arg(long, default_value_t = 1)]
@@ -259,6 +272,7 @@ async fn generate_npc_with_ollama(
     race: Option<&str>,
     class: Option<&str>,
     level: Option<u8>,
+    level_distribution: Option<Vec<u8>>, // e.g., [3, 5, 2] for Fighter 3/Wizard 5/Cleric 2
     level_range: Option<(u8, u8)>,
     alignment: Option<&str>,
     role: &str,
@@ -269,7 +283,7 @@ async fn generate_npc_with_ollama(
         .build()
         .context("Failed to create HTTP client")?;
 
-    let prompt = create_npc_generation_prompt(name, race, class, level, level_range, alignment, role);
+    let prompt = create_npc_generation_prompt(name, race, class, level, level_distribution, level_range, alignment, role);
 
     let request = OllamaRequest {
         model: "qwen2.5:32b-instruct".to_string(),
@@ -315,6 +329,7 @@ fn create_npc_generation_prompt(
     race: Option<&str>,
     class: Option<&str>,
     level: Option<u8>,
+    level_distribution: Option<Vec<u8>>,
     level_range: Option<(u8, u8)>,
     alignment: Option<&str>,
     role: &str,
@@ -323,11 +338,12 @@ fn create_npc_generation_prompt(
         "You are a D&D 2024 character generator. Generate a complete, TRULY RANDOM D&D character with maximum variety and creativity.\n\n"
     );
 
-    // Determine if this is a multiclass character (if class contains comma)
-    let is_multiclass = class.map(|c| c.contains(',')).unwrap_or(false);
+    // Parse classes and limit to 3
+    let classes: Vec<&str> = class.map(|c| c.split(',').take(3).collect()).unwrap_or_default();
+    let is_multiclass = classes.len() > 1;
 
     // Add user constraints if provided
-    let has_constraints = name.is_some() || race.is_some() || class.is_some() || level.is_some() || level_range.is_some() || alignment.is_some() || role != "Mercenary";
+    let has_constraints = name.is_some() || race.is_some() || class.is_some() || level.is_some() || level_distribution.is_some() || level_range.is_some() || alignment.is_some() || role != "Mercenary";
 
     if has_constraints {
         prompt.push_str("USER CONSTRAINTS (MUST follow these exactly):\n");
@@ -337,19 +353,55 @@ fn create_npc_generation_prompt(
         if let Some(r) = race {
             prompt.push_str(&format!("- Race MUST be: {}\n", r));
         }
-        if let Some(c) = class {
+        if let Some(_c) = class {
             if is_multiclass {
-                prompt.push_str(&format!("- Classes MUST be (multiclass): {}\n", c));
+                let class_names = classes.join(", ");
+                prompt.push_str(&format!("- Classes MUST be (multiclass): {}\n", class_names));
                 prompt.push_str("  - This is a MULTICLASS character with multiple classes\n");
-                prompt.push_str("  - Distribute levels appropriately between the classes\n");
+
+                if let Some(dist) = &level_distribution {
+                    // Manual level distribution specified
+                    prompt.push_str("  - Level distribution:\n");
+                    for (i, (class_name, class_level)) in classes.iter().zip(dist.iter()).enumerate() {
+                        if i < classes.len() {
+                            prompt.push_str(&format!("    * {} {} levels\n", class_name.trim(), class_level));
+                        }
+                    }
+                    let total: u8 = dist.iter().sum();
+                    prompt.push_str(&format!("  - Total character level: {}\n", total));
+                } else if let Some(l) = level {
+                    // Total level specified, distribute randomly
+                    prompt.push_str(&format!("  - TOTAL level is {} - distribute these {} levels across the {} classes\n", l, l, classes.len()));
+                    prompt.push_str("  - Example distributions you could use:\n");
+                    if classes.len() == 2 && l >= 2 {
+                        prompt.push_str(&format!("    * {}: {}, {}: {} OR {}: {}, {}: {}, etc.\n",
+                            classes[0].trim(), l-1,
+                            classes[1].trim(), 1,
+                            classes[0].trim(), l/2,
+                            classes[1].trim(), l - l/2));
+                    } else if classes.len() == 3 && l >= 3 {
+                        prompt.push_str(&format!("    * {}: {}, {}: {}, {}: {}, etc.\n",
+                            classes[0].trim(), l/3,
+                            classes[1].trim(), l/3,
+                            classes[2].trim(), l - 2*(l/3)));
+                    }
+                } else {
+                    prompt.push_str("  - Choose a total level and distribute it randomly across classes\n");
+                }
             } else {
-                prompt.push_str(&format!("- Class MUST be: {}\n", c));
+                prompt.push_str(&format!("- Class MUST be: {}\n", classes[0]));
             }
         }
-        if let Some(l) = level {
-            prompt.push_str(&format!("- Level MUST be: {}\n", l));
-        } else if let Some((low, high)) = level_range {
-            prompt.push_str(&format!("- Level MUST be between {} and {} (inclusive)\n", low, high));
+
+        // Level specification (only if not already specified above in multiclass distribution)
+        if level_distribution.is_none() {
+            if let Some(l) = level {
+                if !is_multiclass {
+                    prompt.push_str(&format!("- Level MUST be: {}\n", l));
+                }
+            } else if let Some((low, high)) = level_range {
+                prompt.push_str(&format!("- Level MUST be between {} and {} (inclusive)\n", low, high));
+            }
         }
         if let Some(a) = alignment {
             prompt.push_str(&format!("- Alignment MUST be: {}\n", a));
@@ -585,6 +637,70 @@ async fn main() -> Result<()> {
         println!("  Setting count to 25\n");
     }
 
+    // Parse and validate classes (limit to 3)
+    let classes: Vec<&str> = args.class.as_ref()
+        .map(|c| c.split(',').take(3).collect())
+        .unwrap_or_default();
+    let num_classes = classes.len();
+
+    if num_classes > 3 {
+        println!("⚠ Warning: More than 3 classes specified. Using only first 3: {}", classes.join(", "));
+    }
+
+    // Build level distribution vector if lvl1/lvl2/lvl3 are specified
+    let level_distribution = if args.lvl1.is_some() || args.lvl2.is_some() || args.lvl3.is_some() {
+        let mut dist = Vec::new();
+        if let Some(l1) = args.lvl1 {
+            if l1 < 1 || l1 > 20 {
+                eprintln!("✗ Error: --lvl1 must be between 1 and 20");
+                return Ok(());
+            }
+            dist.push(l1);
+        }
+        if let Some(l2) = args.lvl2 {
+            if l2 < 1 || l2 > 20 {
+                eprintln!("✗ Error: --lvl2 must be between 1 and 20");
+                return Ok(());
+            }
+            dist.push(l2);
+        }
+        if let Some(l3) = args.lvl3 {
+            if l3 < 1 || l3 > 20 {
+                eprintln!("✗ Error: --lvl3 must be between 1 and 20");
+                return Ok(());
+            }
+            dist.push(l3);
+        }
+
+        // Validate that distribution matches number of classes
+        if num_classes > 0 && dist.len() != num_classes {
+            eprintln!("✗ Error: Level distribution count ({}) doesn't match class count ({})",
+                dist.len(), num_classes);
+            eprintln!("  Classes: {}", classes.join(", "));
+            return Ok(());
+        }
+
+        // Validate total level
+        let total_level: u8 = dist.iter().sum();
+        if total_level < 1 || total_level > 20 {
+            eprintln!("✗ Error: Total level from distribution ({}) must be between 1 and 20", total_level);
+            return Ok(());
+        }
+
+        // If explicit level was specified, validate it matches
+        if let Some(level) = args.level {
+            if total_level != level {
+                eprintln!("✗ Error: Level distribution sum ({}) doesn't match specified level ({})",
+                    total_level, level);
+                return Ok(());
+            }
+        }
+
+        Some(dist)
+    } else {
+        None
+    };
+
     // Validate level if specified
     if let Some(level) = args.level {
         if level < 1 || level > 20 {
@@ -608,7 +724,7 @@ async fn main() -> Result<()> {
     }
 
     // Calculate level range (only if level is not explicitly specified)
-    let level_range = if args.level.is_none() && (args.low != 1 || args.high != 10) {
+    let level_range = if args.level.is_none() && level_distribution.is_none() && (args.low != 1 || args.high != 10) {
         Some((args.low, args.high))
     } else {
         None
@@ -629,6 +745,7 @@ async fn main() -> Result<()> {
             args.race.as_deref(),
             args.class.as_deref(),
             args.level,
+            level_distribution.clone(),
             level_range,
             args.alignment.as_deref(),
             &args.role,
