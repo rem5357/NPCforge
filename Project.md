@@ -79,9 +79,15 @@ cargo run
 - `-n, --count <COUNT>` - Number of NPCs to generate (max 25, default: 1)
 - `--name <NAME>` - Specific name for the NPC (automatically sets count to 1)
 - `-r, --race <RACE>` - Specify race (e.g., "Dwarf", "Elf", "Dragonborn", "Tabaxi")
-- `-c, --class <CLASS>` - Specify class (e.g., "Ranger", "Wizard", "Barbarian", "Rogue")
-- `-l, --level <LEVEL>` - Specify level (1-20)
+- `-c, --class <CLASS>` - Specify class(es). Comma-separated for multiclass, max 3 (e.g., "Ranger" or "Fighter,Wizard,Cleric")
+- `-l, --level <LEVEL>` - Specify total level (1-20). For multiclass, this is distributed across all classes
+- `--lvl1 <LEVEL>` - Levels in first class (for manual multiclass distribution)
+- `--lvl2 <LEVEL>` - Levels in second class (for manual multiclass distribution)
+- `--lvl3 <LEVEL>` - Levels in third class (for manual multiclass distribution)
+- `--low <LEVEL>` - Minimum level for random generation (1-20, default: 1)
+- `--high <LEVEL>` - Maximum level for random generation (1-20, default: 10)
 - `-a, --alignment <ALIGNMENT>` - Specify alignment (e.g., "CG", "LN", "CE")
+- `--role <ROLE>` - Role/occupation (e.g., "Mercenary", "Scholar", "Pirate", "random", default: "Mercenary")
 - `-h, --help` - Display help information
 
 ### Usage Examples
@@ -100,6 +106,21 @@ cargo run -- --name "Mithroll"
 
 # Generate 10 Wizards
 cargo run -- -n 10 -c "Wizard"
+
+# Generate NPCs between level 5-10
+cargo run -- -n 3 --low 5 --high 10
+
+# Generate a multiclass Fighter/Wizard (level 10, AI distributes)
+cargo run -- -c "Fighter,Wizard" -l 10
+
+# Generate a multiclass with manual level distribution (7 Paladin / 3 Warlock)
+cargo run -- -c "Paladin,Warlock" --lvl1 7 --lvl2 3
+
+# Generate a 3-class multiclass (5 Fighter / 3 Rogue / 2 Ranger)
+cargo run -- -c "Fighter,Rogue,Ranger" --lvl1 5 --lvl2 3 --lvl3 2
+
+# Generate an NPC with a specific role
+cargo run -- --role "Pirate" -c "Rogue"
 
 # Get help
 cargo run -- --help
@@ -170,6 +191,16 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 - ✅ Added validation (count ≤ 25, level 1-20)
 - ✅ Created summary output with success/failure counts
 
+### Phase 5: Multiclass System
+- ✅ Implemented multiclass support (up to 3 classes)
+- ✅ Added level range parameters (`--low`, `--high`)
+- ✅ Added role/occupation system with 15+ role options
+- ✅ Correct multiclass level distribution (total levels split across classes)
+- ✅ Manual level distribution parameters (`--lvl1`, `--lvl2`, `--lvl3`)
+- ✅ Fixed multiclass JSON format (class as "Fighter/Wizard" not array)
+- ✅ Enhanced spellcasting flexibility for multiclass characters
+- ✅ Comprehensive validation for level distribution
+
 ## Lessons Learned
 
 ### AI Integration
@@ -178,6 +209,8 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 3. **Prompt Engineering**: Being explicit about randomization requirements ("DO NOT default to elves/wizards") helped break patterns
 4. **Flexible Schemas**: Using `#[serde(default)]` for optional fields prevents parsing failures when AI doesn't generate every field
 5. **Constraint Handling**: AI needs clear "MUST follow" language when user specifies constraints
+6. **Multiclass JSON Format**: AI initially generated arrays for multiclass (["Fighter", "Wizard"]) but data structure expected strings. Explicit format examples in prompt ("Fighter/Wizard") fixed this immediately.
+7. **Spellcasting Flexibility**: Making Spellcasting struct fields optional with `#[serde(default)]` prevents crashes when AI generates incomplete spell data for multiclass characters
 
 ### Rust Development
 1. **Async/Await**: Tokio makes HTTP requests clean and efficient
@@ -206,18 +239,19 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 1. **Batch Generation Reliability**: When generating multiple NPCs (5+), occasional JSON parsing failures or connection timeouts may occur
    - **Mitigation**: Extended HTTP timeout to 10 minutes, added 500ms delay between requests
    - **Debugging**: Enhanced error messages now show actual response content when parsing fails
-2. **Constrained Generation Parsing**: Sometimes fails when multiple constraints are specified (needs investigation)
-3. **Backstory Format**: AI sometimes condenses backstory into 1 paragraph instead of 3-5 (prompt could be refined)
-4. **No Spell Validation**: Doesn't verify that selected spells are valid for the class/level
-5. **Windows Path Handling**: Character names with special characters might cause file save issues
+2. **Backstory Format**: AI sometimes condenses backstory into 1 paragraph instead of 3-5 (prompt could be refined)
+3. **No Spell Validation**: Doesn't verify that selected spells are valid for the class/level
+4. **Windows Path Handling**: Character names with special characters might cause file save issues
+5. **Hit Dice Format**: Multiclass characters sometimes show simplified hit dice (e.g., "10d8") instead of detailed breakdown (e.g., "7d10 + 3d8") - cosmetic issue only
 
 ## Future Enhancements (TODOs)
 
 ### High Priority
-- [ ] Fix constrained generation parsing errors
-- [ ] Add `.gitignore` file (ignore `target/`, `*.json`, etc.)
-- [ ] Create comprehensive README.md
+- [x] Fix constrained generation parsing errors (COMPLETED: Fixed multiclass JSON format)
+- [x] Add `.gitignore` file (COMPLETED)
+- [x] Create comprehensive README.md (COMPLETED)
 - [ ] Add example generated NPCs to repository
+- [ ] Improve hit dice format for multiclass in AI prompt
 
 ### Medium Priority
 - [ ] Add more CLI options:
@@ -288,6 +322,15 @@ NPCforge/
 - Multi-NPC generation
 - Constraint-based generation
 
+**Session 3**: Multiclass system and JSON format fixes
+- Implemented multiclass support (up to 3 classes)
+- Added level range and role parameters
+- Fixed multiclass JSON format (arrays → strings with "/" separator)
+- Enhanced spellcasting flexibility with #[serde(default)]
+- Manual level distribution (--lvl1, --lvl2, --lvl3)
+- Comprehensive validation and error handling
+- Updated documentation with multiclass examples
+
 ## Example Generated NPCs
 
 ### Vesla Dawnstar
@@ -303,6 +346,14 @@ NPCforge/
 - **Background**: Guild Artisan (Brewer)
 - **Alignment**: Chaotic Neutral
 - **Highlights**: Unique race/class combo, investigative focus
+
+### Vex Shadowstep (Multiclass)
+- **Race**: Tiefling
+- **Class**: Fighter/Rogue/Ranger (Battle Master/Thief/Beast Master), Level 10
+- **Level Distribution**: 5 Fighter / 3 Rogue / 2 Ranger
+- **Background**: Urchin
+- **Alignment**: Chaotic Neutral
+- **Highlights**: 3-class multiclass, manual level distribution, versatile skill set
 
 ## Contributing
 
@@ -321,4 +372,4 @@ NPCforge/
 
 ---
 
-**Last Updated**: November 6, 2024
+**Last Updated**: November 7, 2025
