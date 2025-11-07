@@ -20,17 +20,29 @@ struct Args {
     #[arg(short, long)]
     race: Option<String>,
 
-    /// Class for the NPC (e.g., "Ranger", "Wizard", "Barbarian")
+    /// Class for the NPC - can specify multiple comma-separated for multiclass (e.g., "Ranger,Druid")
     #[arg(short, long)]
     class: Option<String>,
 
-    /// Level for the NPC (1-20)
+    /// Specific level for the NPC (1-20, overrides low/high)
     #[arg(short, long)]
     level: Option<u8>,
+
+    /// Minimum level for random generation (1-20)
+    #[arg(long, default_value_t = 1)]
+    low: u8,
+
+    /// Maximum level for random generation (1-20)
+    #[arg(long, default_value_t = 10)]
+    high: u8,
 
     /// Alignment for the NPC (e.g., "CG", "LN", "CE")
     #[arg(short, long)]
     alignment: Option<String>,
+
+    /// Role/occupation for the NPC (e.g., "Mercenary", "Scholar", "Pirate", or "random")
+    #[arg(long, default_value = "Mercenary")]
+    role: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -234,6 +246,7 @@ struct OllamaOptions {
     temperature: f32,
     top_p: f32,
     top_k: i32,
+    num_predict: i32,  // Maximum number of tokens to generate
 }
 
 #[derive(Debug, Deserialize)]
@@ -246,7 +259,9 @@ async fn generate_npc_with_ollama(
     race: Option<&str>,
     class: Option<&str>,
     level: Option<u8>,
+    level_range: Option<(u8, u8)>,
     alignment: Option<&str>,
+    role: &str,
 ) -> Result<NPC> {
     // Create client with extended timeout for AI generation
     let client = reqwest::Client::builder()
@@ -254,7 +269,7 @@ async fn generate_npc_with_ollama(
         .build()
         .context("Failed to create HTTP client")?;
 
-    let prompt = create_npc_generation_prompt(name, race, class, level, alignment);
+    let prompt = create_npc_generation_prompt(name, race, class, level, level_range, alignment, role);
 
     let request = OllamaRequest {
         model: "qwen2.5:32b-instruct".to_string(),
@@ -265,6 +280,7 @@ async fn generate_npc_with_ollama(
             temperature: 1.2,  // Higher temperature for more randomness (default is 0.8)
             top_p: 0.95,       // Nucleus sampling
             top_k: 50,         // Top-k sampling for variety
+            num_predict: 4096, // Increase max tokens to prevent truncation
         }),
     };
 
@@ -299,14 +315,19 @@ fn create_npc_generation_prompt(
     race: Option<&str>,
     class: Option<&str>,
     level: Option<u8>,
+    level_range: Option<(u8, u8)>,
     alignment: Option<&str>,
+    role: &str,
 ) -> String {
     let mut prompt = String::from(
         "You are a D&D 2024 character generator. Generate a complete, TRULY RANDOM D&D character with maximum variety and creativity.\n\n"
     );
 
+    // Determine if this is a multiclass character (if class contains comma)
+    let is_multiclass = class.map(|c| c.contains(',')).unwrap_or(false);
+
     // Add user constraints if provided
-    let has_constraints = name.is_some() || race.is_some() || class.is_some() || level.is_some() || alignment.is_some();
+    let has_constraints = name.is_some() || race.is_some() || class.is_some() || level.is_some() || level_range.is_some() || alignment.is_some() || role != "Mercenary";
 
     if has_constraints {
         prompt.push_str("USER CONSTRAINTS (MUST follow these exactly):\n");
@@ -317,13 +338,28 @@ fn create_npc_generation_prompt(
             prompt.push_str(&format!("- Race MUST be: {}\n", r));
         }
         if let Some(c) = class {
-            prompt.push_str(&format!("- Class MUST be: {}\n", c));
+            if is_multiclass {
+                prompt.push_str(&format!("- Classes MUST be (multiclass): {}\n", c));
+                prompt.push_str("  - This is a MULTICLASS character with multiple classes\n");
+                prompt.push_str("  - Distribute levels appropriately between the classes\n");
+            } else {
+                prompt.push_str(&format!("- Class MUST be: {}\n", c));
+            }
         }
         if let Some(l) = level {
             prompt.push_str(&format!("- Level MUST be: {}\n", l));
+        } else if let Some((low, high)) = level_range {
+            prompt.push_str(&format!("- Level MUST be between {} and {} (inclusive)\n", low, high));
         }
         if let Some(a) = alignment {
             prompt.push_str(&format!("- Alignment MUST be: {}\n", a));
+        }
+        if role.to_lowercase() != "mercenary" {
+            if role.to_lowercase() == "random" {
+                prompt.push_str("- Role/Occupation MUST be randomly selected\n");
+            } else {
+                prompt.push_str(&format!("- Role/Occupation MUST be: {}\n", role));
+            }
         }
         prompt.push_str("\n");
     }
@@ -345,15 +381,24 @@ Requirements:
     }
 
     // Add class requirement (random or constrained)
-    if class.is_some() {
-        prompt.push_str(&format!("- Use the specified class: {} and choose an appropriate subclass\n", class.unwrap()));
+    if let Some(c) = class {
+        if is_multiclass {
+            prompt.push_str(&format!("- Use the specified MULTICLASS: {} and choose appropriate subclasses for each class\n", c));
+            prompt.push_str("  - This is a multiclass character - split levels appropriately\n");
+            prompt.push_str("  - Choose compatible ability scores and features for both classes\n");
+        } else {
+            prompt.push_str(&format!("- Use the specified class: {} and choose an appropriate subclass\n", c));
+        }
     } else {
         prompt.push_str("- Choose a COMPLETELY RANDOM class from ALL official D&D classes (Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Warlock, Wizard, Artificer) and appropriate subclass\n");
+        prompt.push_str("  - 10% chance: Make this a MULTICLASS character with 2 classes (e.g., Fighter/Rogue, Paladin/Warlock, etc.)\n");
     }
 
     // Add level requirement (random or constrained)
     if let Some(l) = level {
         prompt.push_str(&format!("- Use the specified level: {}\n", l));
+    } else if let Some((low, high)) = level_range {
+        prompt.push_str(&format!("- Choose a random level between {} and {} (inclusive)\n", low, high));
     } else {
         prompt.push_str("- Choose a random level between 1-20\n");
     }
@@ -363,6 +408,18 @@ Requirements:
         prompt.push_str(&format!("- Use the specified alignment: {}\n", a));
     } else {
         prompt.push_str("- Choose a RANDOM alignment (Lawful Good, Neutral Good, Chaotic Good, Lawful Neutral, True Neutral, Chaotic Neutral, Lawful Evil, Neutral Evil, Chaotic Evil)\n");
+    }
+
+    // Add role requirement
+    if role.to_lowercase() == "random" {
+        prompt.push_str("- Choose a RANDOM role/occupation from: Soldier, Mercenary, Pirate, Merchant, Scholar, Academic, Builder, Craftsman, Farmer, Laborer, Vagrant, Beggar, Noble, Aristocrat, Statesman, Diplomat, Musician, Bard, Traveling Performer, Entertainer, Sailor, Guard, Adventurer, Explorer, Hermit, Mystic, etc.\n");
+    } else if role.to_lowercase() != "mercenary" {
+        prompt.push_str(&format!("- Role/Occupation MUST be: {}\n", role));
+        prompt.push_str("  - Integrate this role into the backstory and personality\n");
+    } else {
+        // Default: Mercenary
+        prompt.push_str("- Role/Occupation: Mercenary (fighter for hire)\n");
+        prompt.push_str("  - This character makes their living through combat and protection services\n");
     }
 
     prompt.push_str("- Choose a RANDOM background (Acolyte, Charlatan, Criminal, Entertainer, Folk Hero, Guild Artisan, Hermit, Noble, Outlander, Sage, Sailor, Soldier, Urchin, etc.)\n");
@@ -536,6 +593,27 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Validate level range
+    if args.low < 1 || args.low > 20 {
+        eprintln!("✗ Error: --low must be between 1 and 20");
+        return Ok(());
+    }
+    if args.high < 1 || args.high > 20 {
+        eprintln!("✗ Error: --high must be between 1 and 20");
+        return Ok(());
+    }
+    if args.low > args.high {
+        eprintln!("✗ Error: --low ({}) cannot be greater than --high ({})", args.low, args.high);
+        return Ok(());
+    }
+
+    // Calculate level range (only if level is not explicitly specified)
+    let level_range = if args.level.is_none() && (args.low != 1 || args.high != 10) {
+        Some((args.low, args.high))
+    } else {
+        None
+    };
+
     println!("Generating {} NPC(s)...\n", args.count);
 
     let mut success_count = 0;
@@ -551,7 +629,9 @@ async fn main() -> Result<()> {
             args.race.as_deref(),
             args.class.as_deref(),
             args.level,
+            level_range,
             args.alignment.as_deref(),
+            &args.role,
         )
         .await;
 
