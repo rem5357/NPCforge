@@ -164,8 +164,10 @@ NPCs are saved as JSON files in the current directory with filenames based on th
   "subclass": "Subclass (or Champion/Evocation for multiclass)",
   "level": 10,
   "class_levels": {"Fighter": 6, "Wizard": 4},  // Optional, multiclass only
+  "role": "Mercenary / Farmer / Scholar / etc.",
   "background": "Background",
   "alignment": "Alignment",
+  "fighting_preference": "Melee / Ranged / Versatile",
   "ability_scores": { ... },
   "hit_points": { ... },
   "armor_class": 15,
@@ -227,9 +229,16 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 
 ### Phase 6: Combat Styles & Role-Based Backstories
 - ✅ Added `class_levels` field to JSON for multiclass transparency
+- ✅ Added `role` field to JSON (shows character's occupation)
+- ✅ Added `fighting_preference` field to JSON (Melee/Ranged/Versatile)
 - ✅ Implemented `--melee` and `--ranged` fighting style flags
 - ✅ Fighting style affects weapons, spells, subclass, and feat selection
 - ✅ Default fighting styles (90% ranged for casters, 50/50 for martial)
+- ✅ **Ability score optimization by fighting style**:
+  - Melee: High STR/DEX (16+), high CON (14-16)
+  - Ranged: High DEX (16-18), dump STR, good WIS
+  - Versatile: Balanced STR/DEX (14-16), solid CON
+  - Casters: Prioritize casting stat, then optimize by fighting style
 - ✅ Role-based backstory system (adventurer vs working NPC)
 - ✅ Combat roles (Mercenary, Soldier) get adventurer-focused backstories
 - ✅ Non-combat roles (Farmer, Merchant) get profession-focused NPC backstories
@@ -367,8 +376,14 @@ NPCforge/
 
 **Session 4**: Fighting styles and role-based backstories
 - Added `class_levels` field to JSON for multiclass transparency
+- Added `role` and `fighting_preference` fields to JSON output
 - Implemented `--melee` and `--ranged` combat style preferences
 - Fighting styles affect weapons, spells, subclasses, and feats
+- **Ability score optimization by fighting style**
+  - Melee: High STR/DEX (16+), high CON (14-16), dump CHA/INT
+  - Ranged: High DEX (16-18), dump STR, good WIS for perception
+  - Versatile: Balanced STR/DEX (14-16), solid CON (14+)
+  - Casters: Prioritize casting stat (16-18), optimize physical stats by style
 - Role-based backstory system (adventurer vs working NPC)
 - Combat roles get adventurer-focused backstories
 - Non-combat roles get profession-focused NPC backstories

@@ -10,12 +10,13 @@ Generate fully-fledged D&D characters with complete character sheets, stats, spe
 - ⚔️ **Combat Ready** - Attacks, spells, AC, HP, initiative automatically calculated
 - 🎭 **Multiclass Support** - Up to 3 classes with automatic or manual level distribution
 - 🗡️ **Fighting Styles** - Melee, ranged, or versatile combat preferences
+- 💪 **Optimized Ability Scores** - Automatically adjusted based on fighting style (high STR for melee, high DEX for ranged, etc.)
 - 📜 **Rich Backstories** - Detailed 3-5 paragraph backstories covering childhood, education, relationships, and current situation
 - 🏘️ **Role-Based NPCs** - Combat roles (Mercenary, Soldier) or working NPCs (Farmer, Merchant, Scholar)
 - 🎨 **High Variety** - Advanced randomization prevents repetitive characters
 - ⚙️ **Customizable** - Extensive CLI parameters for fine-grained control
 - 📦 **Batch Generation** - Generate up to 25 NPCs at once
-- 💾 **JSON Export** - Clean, structured JSON output with level breakdown for multiclass
+- 💾 **JSON Export** - Clean, structured JSON with role, fighting preference, and multiclass level breakdown
 
 ## Quick Start
 
@@ -81,8 +82,10 @@ cargo run -- --name "Thorin Oakenshield"
   "class": "Rogue",
   "subclass": "Inquisitive",
   "level": 14,
+  "role": "Mercenary",
   "background": "Guild Artisan (Brewer)",
   "alignment": "Chaotic Neutral",
+  "fighting_preference": "Ranged",
   "ability_scores": {
     "strength": 10,
     "dexterity": 18,
@@ -102,11 +105,16 @@ NPCForge uses:
 - **Advanced Prompting** - Ensures varied, creative characters with complete D&D 2024 stats
 
 The AI generates complete characters following D&D 2024 rules, including:
-- Ability scores and modifiers
+- **Optimized ability scores** based on fighting style
+  - Melee: High STR/DEX (16+), high CON (14-16)
+  - Ranged: High DEX (16-18), dump STR, good WIS
+  - Versatile: Balanced STR/DEX (14-16), solid CON
+  - Casters: Prioritize casting stat, then optimize by fighting style
 - Class features and proficiencies
 - Spell selections for spellcasters
 - Equipment appropriate to class and level
 - Personality traits, bonds, ideals, and flaws
+- Role-appropriate backstories (adventurer or working NPC)
 - Comprehensive backstory
 
 ## Project Documentation
