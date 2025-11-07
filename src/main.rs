@@ -76,8 +76,10 @@ struct NPC {
     level: u8,
     #[serde(skip_serializing_if = "Option::is_none")]
     class_levels: Option<std::collections::HashMap<String, u8>>,
+    role: String,
     background: String,
     alignment: String,
+    fighting_preference: String,
 
     // Ability Scores
     ability_scores: AbilityScores,
@@ -533,7 +535,28 @@ Requirements:
     }
 
     prompt.push_str("\n- Choose a RANDOM background (Acolyte, Charlatan, Criminal, Entertainer, Folk Hero, Guild Artisan, Hermit, Noble, Outlander, Sage, Sailor, Soldier, Urchin, etc.)\n");
-    prompt.push_str("- Generate appropriate ability scores (use standard array or point buy)\n");
+
+    // Add ability score allocation guidance based on fighting preference
+    prompt.push_str("- Generate appropriate ability scores (use standard array or point buy) based on fighting preference:\n");
+    if melee && ranged {
+        prompt.push_str("  * VERSATILE BUILD: Balance between STR/DEX (14-16 each), solid CON (14+)\n");
+        prompt.push_str("  * For casters: Prioritize casting stat (INT/WIS/CHA 16+), then balance STR/DEX (12-14)\n");
+    } else if melee {
+        prompt.push_str("  * MELEE BUILD: High STR (16+) for heavy weapons OR high DEX (16+) for finesse weapons\n");
+        prompt.push_str("  * High CON (14-16) for survivability in melee range\n");
+        prompt.push_str("  * For melee casters: Casting stat 16+, then STR or DEX 14+, CON 14+\n");
+        prompt.push_str("  * Dump stats: CHA (unless Paladin/Warlock), INT (unless Wizard/Artificer)\n");
+    } else if ranged {
+        prompt.push_str("  * RANGED BUILD: High DEX (16-18) for ranged attacks and AC\n");
+        prompt.push_str("  * Good WIS (12-14) for Perception and awareness\n");
+        prompt.push_str("  * Moderate CON (12-14) since staying at range\n");
+        prompt.push_str("  * For ranged casters: Casting stat 16-18, then DEX 14+, CON 12-14\n");
+        prompt.push_str("  * Dump stats: STR (ranged doesn't need it), CHA (unless needed for class)\n");
+    } else {
+        prompt.push_str("  * Random allocation appropriate to class and randomly chosen fighting style\n");
+        prompt.push_str("  * Prioritize primary stat for class, then physical stats based on chosen style\n");
+    }
+    prompt.push_str("\n");
     prompt.push_str("- Calculate all derived stats correctly (AC, HP, initiative, proficiency bonus, etc.)\n");
     prompt.push_str("- Include all relevant skills, proficiencies, and saving throws\n");
     prompt.push_str("- For spellcasters, include appropriate spells based on class and level\n");
@@ -574,6 +597,11 @@ IMPORTANT: For multiclass characters:
 - "class_levels" is an object showing the level distribution (e.g., {"Fighter": 5, "Wizard": 5})
 - ONLY include "class_levels" for multiclass characters (omit for single-class)
 
+Fighting preference values:
+- "Melee" if primarily melee combat
+- "Ranged" if primarily ranged combat
+- "Versatile" if both melee and ranged
+
 {
   "name": "Full character name",
   "race": "Character race",
@@ -581,8 +609,10 @@ IMPORTANT: For multiclass characters:
   "subclass": "Character subclass or null (or Battle Master/Evocation for multiclass)",
   "level": 10,
   "class_levels": {"Fighter": 5, "Wizard": 5},
+  "role": "Their occupation/role (Mercenary, Farmer, Merchant, etc.)",
   "background": "Background name",
   "alignment": "Alignment",
+  "fighting_preference": "Melee, Ranged, or Versatile",
   "ability_scores": {
     "strength": 10,
     "dexterity": 14,
