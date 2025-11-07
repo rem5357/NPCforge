@@ -475,7 +475,17 @@ NPCforge/
 
 ---
 
+## Documentation Files
+
+- **[README.md](README.md)** - Project overview and quick start
+- **[USAGE.md](USAGE.md)** - Complete parameter reference with examples and best practices
+- **[Project.md](Project.md)** - This file (complete project documentation)
+
+---
+
 ## Quick Reference
+
+For complete parameter documentation, see [USAGE.md](USAGE.md).
 
 ### Common Commands
 ```bash

@@ -117,15 +117,11 @@ The AI generates complete characters following D&D 2024 rules, including:
 - Role-appropriate backstories (adventurer or working NPC)
 - Comprehensive backstory
 
-## Project Documentation
+## Documentation
 
-See [Project.md](Project.md) for:
-- Detailed project overview
-- Technology stack
-- Development timeline
-- Lessons learned
-- Future enhancements
-- Known issues
+- **[USAGE.md](USAGE.md)** - Complete parameter reference, examples, and best practices
+- **[Project.md](Project.md)** - Detailed project overview, technology stack, development timeline
+- **[README.md](README.md)** - This file (quick start and overview)
 
 ## Example Characters
 
