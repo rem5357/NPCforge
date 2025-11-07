@@ -1,6 +1,10 @@
-# NPCForge
+# NPCForge v0.1.0
 
 A Rust CLI application that uses local AI (Ollama with Qwen2.5) to generate comprehensive D&D 2024 NPCs with full character sheets, stats, spells, equipment, and detailed backstories.
+
+**Version**: 0.1.0
+**Status**: Stable Release
+**Last Updated**: November 7, 2025
 
 ## Overview
 
@@ -188,7 +192,28 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 }
 ```
 
-## What We've Built
+## Version 0.1.0 Features
+
+### Core Features
+- ✅ **Complete NPC Generation**: Full D&D 2024 character sheets with all stats
+- ✅ **Multiclass Support**: Up to 3 classes with manual or automatic level distribution
+- ✅ **Fighting Style System**: Melee, ranged, or versatile combat preferences
+- ✅ **Optimized Ability Scores**: Automatically adjusted based on fighting style
+- ✅ **Role-Based Backstories**: Combat adventurers vs working NPCs
+- ✅ **Rich JSON Output**: Includes role, fighting_preference, and class_levels breakdown
+- ✅ **Batch Generation**: Create up to 25 NPCs at once
+- ✅ **Extensive CLI Parameters**: 15+ command-line options for customization
+
+### Technical Features
+- ✅ Local AI integration (Ollama + Qwen2.5-32B)
+- ✅ Async/await with Tokio
+- ✅ Type-safe data modeling with Serde
+- ✅ Flexible JSON schemas with `#[serde(default)]`
+- ✅ Comprehensive error handling and validation
+- ✅ Extended timeout support (10 minutes) for large models
+- ✅ Rate limiting for batch generation
+
+## Development History
 
 ### Phase 1: Initial Setup
 - ✅ Created Rust project structure
@@ -254,6 +279,8 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 5. **Constraint Handling**: AI needs clear "MUST follow" language when user specifies constraints
 6. **Multiclass JSON Format**: AI initially generated arrays for multiclass (["Fighter", "Wizard"]) but data structure expected strings. Explicit format examples in prompt ("Fighter/Wizard") fixed this immediately.
 7. **Spellcasting Flexibility**: Making Spellcasting struct fields optional with `#[serde(default)]` prevents crashes when AI generates incomplete spell data for multiclass characters
+8. **Ability Score Guidance**: AI needed explicit guidance on ability score allocation by fighting style. Providing specific ranges (STR 16+ for melee, DEX 16-18 for ranged) resulted in properly optimized builds.
+9. **Role-Based Context**: Differentiating combat vs non-combat roles in prompts dramatically improved backstory quality. NPCs now have realistic profession-focused stories instead of defaulting to adventurers.
 
 ### Rust Development
 1. **Async/Await**: Tokio makes HTTP requests clean and efficient
@@ -265,6 +292,8 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 1. **Nested Structures**: Breaking down complex data (spells, equipment, appearance) into separate structs improves readability
 2. **Option Types**: Using `Option<T>` for nullable fields (subclass, spells) handles non-spellcasters gracefully
 3. **Type Safety**: Using `u8` for levels/counts provides compile-time validation
+4. **HashMap for Dynamic Data**: Using `HashMap<String, u8>` for class_levels allows flexible multiclass representation and serializes cleanly to JSON
+5. **Conditional Serialization**: Using `#[serde(skip_serializing_if = "Option::is_none")]` keeps single-class JSON clean by omitting class_levels field
 
 ### User Experience
 1. **Progress Indicators**: Showing "Generating NPC 1/5..." helps users track progress
@@ -446,4 +475,49 @@ NPCforge/
 
 ---
 
+## Quick Reference
+
+### Common Commands
+```bash
+# Generate a single random NPC
+cargo run
+
+# Generate 5 NPCs between level 5-10
+cargo run -- -n 5 --low 5 --high 10
+
+# Generate a melee-focused Fighter
+cargo run -- -c "Fighter" -l 8 --melee
+
+# Generate a ranged Wizard scholar
+cargo run -- -c "Wizard" -l 10 --ranged --role "Scholar"
+
+# Generate a multiclass with manual level distribution
+cargo run -- -c "Fighter,Wizard" --lvl1 6 --lvl2 4 --melee
+
+# Generate a working NPC (farmer, not adventurer)
+cargo run -- --role "Farmer" -c "Druid" -l 5
+```
+
+### JSON Output Fields
+- `name`, `race`, `class`, `subclass`, `level`
+- `class_levels` (multiclass only) - shows level distribution
+- `role` - occupation (Mercenary, Farmer, Scholar, etc.)
+- `background`, `alignment`
+- `fighting_preference` - combat style (Melee/Ranged/Versatile)
+- `ability_scores`, `hit_points`, `armor_class`, `initiative`, `speed`, `proficiency_bonus`
+- `skills`, `saving_throws`, `languages`, `tool_proficiencies`
+- `attacks`, `spells` (if applicable)
+- `equipment` (armor, weapons, gear, treasure)
+- `personality` (traits, ideals, bonds, flaws)
+- `backstory`, `appearance`, `features`
+
+### Ability Score Optimization
+- **Melee**: STR 16+ (or DEX 16+ finesse), CON 14-16, dump CHA/INT
+- **Ranged**: DEX 16-18, WIS 12-14, dump STR
+- **Versatile**: STR/DEX 14-16, CON 14+
+- **Casters**: Casting stat 16-18, then optimize by fighting style
+
+---
+
+**Version**: 0.1.0
 **Last Updated**: November 7, 2025
