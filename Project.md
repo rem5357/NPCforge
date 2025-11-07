@@ -195,12 +195,21 @@ NPCs are saved as JSON files in the current directory with filenames based on th
 2. **Summary Output**: Final success/failure counts provide clear feedback
 3. **Helpful Errors**: Suggesting "ollama pull qwen2.5:32b-instruct" when Ollama fails
 
+### Error Handling & Debugging
+1. **Timeout Configuration**: Large AI models need extended timeouts (10 minutes vs default 30 seconds)
+2. **Error Context**: Using anyhow's `context()` with format strings to include response snippets in errors
+3. **Rate Limiting**: Adding small delays between batch requests prevents overwhelming the AI server
+4. **Error Chain Display**: Using `{:#}` format specifier shows full error context to users
+
 ## Known Issues
 
-1. **Constrained Generation Parsing**: Sometimes fails when multiple constraints are specified (needs investigation)
-2. **Backstory Format**: AI sometimes condenses backstory into 1 paragraph instead of 3-5 (prompt could be refined)
-3. **No Spell Validation**: Doesn't verify that selected spells are valid for the class/level
-4. **Windows Path Handling**: Character names with special characters might cause file save issues
+1. **Batch Generation Reliability**: When generating multiple NPCs (5+), occasional JSON parsing failures or connection timeouts may occur
+   - **Mitigation**: Extended HTTP timeout to 10 minutes, added 500ms delay between requests
+   - **Debugging**: Enhanced error messages now show actual response content when parsing fails
+2. **Constrained Generation Parsing**: Sometimes fails when multiple constraints are specified (needs investigation)
+3. **Backstory Format**: AI sometimes condenses backstory into 1 paragraph instead of 3-5 (prompt could be refined)
+4. **No Spell Validation**: Doesn't verify that selected spells are valid for the class/level
+5. **Windows Path Handling**: Character names with special characters might cause file save issues
 
 ## Future Enhancements (TODOs)
 

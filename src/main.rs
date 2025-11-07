@@ -248,7 +248,11 @@ async fn generate_npc_with_ollama(
     level: Option<u8>,
     alignment: Option<&str>,
 ) -> Result<NPC> {
-    let client = reqwest::Client::new();
+    // Create client with extended timeout for AI generation
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(600)) // 10 minute timeout
+        .build()
+        .context("Failed to create HTTP client")?;
 
     let prompt = create_npc_generation_prompt(name, race, class, level, alignment);
 
@@ -280,10 +284,12 @@ async fn generate_npc_with_ollama(
         .context("Failed to read response text")?;
 
     let ollama_response: OllamaResponse = serde_json::from_str(&response_text)
-        .context("Failed to parse Ollama response")?;
+        .context(format!("Failed to parse Ollama response. Response was: {}",
+            &response_text[..response_text.len().min(500)]))?;
 
     let npc: NPC = serde_json::from_str(&ollama_response.response)
-        .context("Failed to parse NPC JSON from Ollama response")?;
+        .context(format!("Failed to parse NPC JSON. Response was: {}",
+            &ollama_response.response[..ollama_response.response.len().min(1000)]))?;
 
     Ok(npc)
 }
@@ -574,7 +580,7 @@ async fn main() -> Result<()> {
                 println!();
             }
             Err(e) => {
-                eprintln!("✗ Error generating NPC {}: {}", i, e);
+                eprintln!("✗ Error generating NPC {}: {:#}", i, e);
                 if i == 1 {
                     eprintln!("\nMake sure Ollama is running and you have the model installed:");
                     eprintln!("  ollama pull qwen2.5:32b-instruct");
@@ -582,6 +588,11 @@ async fn main() -> Result<()> {
                 failed_count += 1;
                 println!();
             }
+        }
+
+        // Small delay between requests to prevent overwhelming Ollama
+        if i < args.count {
+            tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         }
     }
 
