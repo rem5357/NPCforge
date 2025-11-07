@@ -145,10 +145,14 @@ struct Attack {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Spellcasting {
+    #[serde(default)]
     spellcasting_ability: String,
+    #[serde(default)]
     spell_save_dc: u8,
+    #[serde(default)]
     spell_attack_bonus: i8,
     spell_slots: Option<SpellSlots>,
+    #[serde(default)]
     spells_known: SpellsByLevel,
 }
 
@@ -174,7 +178,7 @@ struct SpellSlots {
     level_9: u8,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct SpellsByLevel {
     #[serde(default)]
     cantrips: Vec<String>,
@@ -493,11 +497,16 @@ Requirements:
 
     prompt.push_str(r#"Output ONLY valid JSON matching this exact structure (no additional text):
 
+IMPORTANT: For multiclass characters:
+- "class" field should be a single string with classes separated by "/" (e.g., "Fighter/Wizard")
+- "subclass" field should be a single string with subclasses separated by "/" in same order (e.g., "Battle Master/Evocation")
+- "level" is the TOTAL character level (all classes combined)
+
 {
   "name": "Full character name",
   "race": "Character race",
-  "class": "Character class",
-  "subclass": "Character subclass or null",
+  "class": "Character class (or Fighter/Wizard for multiclass)",
+  "subclass": "Character subclass or null (or Battle Master/Evocation for multiclass)",
   "level": 10,
   "background": "Background name",
   "alignment": "Alignment",
